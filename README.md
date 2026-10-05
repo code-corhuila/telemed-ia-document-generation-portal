@@ -2,24 +2,34 @@
 
 > document-generation bounded context: web UI (remote)
 
-Part of the **LMS Library** distributed system — team `lms-library`, Grupo 2.
-Governance and documentation live in [`library-docs`](https://github.com/code-corhuila/library-docs).
+Part of team telemed-ia, Grupo 2. Governance and documentation live in
+[telemed-ia-docs](https://github.com/code-corhuila/telemed-ia-docs).
 
 ## Branching
 
-Three permanent branches. **None of them accepts a direct commit** — you enter through a child
-branch and leave through a Pull Request.
+Three permanent branches. None accepts a direct commit.
 
-```
 develop  <--PR--  feat/... fix/... chore/...
 qa       <--PR--  qa/...
 main     <--PR--  release/...  hotfix/...
-```
 
-Promotion happens **by re-application** (`git cherry-pick -x`), never by merging one permanent
-branch into another: `merge develop -> qa` and `merge qa -> main` do not exist in this model.
+Promotion happens by re-application (git cherry-pick -x).
 
-`main` requires **1 approval from `ariel5253`**. On `develop` and `qa` the team sets its own review
-rule.
+main requires 1 approval from @ariel5253.
 
-Full policy: `00-governance/branching-policy.md` in `library-docs`.
+## What lives in this repo
+
+The document-generation domain UI. Exposes ./routes via Native Federation.
+Consumes shell/apiClient and shell/session from telemed-ia-front.
+Does NOT implement its own HTTP client or session (norm 5.4.1).
+
+## How to run
+
+npm ci
+npm start   # runs on port 4204
+
+## Related documentation
+
+- telemed-ia-docs/00-governance/branching-policy.md
+- telemed-ia-docs/05-architecture/decisions/records/
+- Anexo H of the repo norm.
