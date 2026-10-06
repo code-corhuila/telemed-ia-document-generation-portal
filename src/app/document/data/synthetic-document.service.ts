@@ -22,6 +22,8 @@ import { DocumentDataSource } from './document-data-source';
  */
 @Injectable()
 export class SyntheticDocumentService implements DocumentDataSource {
+  private readonly retryOutcomes = new Map<string, ConsultationDocument>();
+
   async listDocuments(): Promise<readonly ConsultationDocument[]> {
     await this.delay(400);
 
@@ -81,6 +83,55 @@ export class SyntheticDocumentService implements DocumentDataSource {
     };
 
     return [available1, generating, pending, error, available2];
+  }
+
+  async downloadDocument(_documentId: string): Promise<Blob> {
+    await this.delay(200);
+
+    const minimalPdf =
+      '%PDF-1.4\n' +
+      '1 0 obj<</Type/Catalog>>endobj\n' +
+      'trailer<</Root 1 0 R>>\n' +
+      '%%EOF\n';
+
+    return new Blob([minimalPdf], { type: 'application/pdf' });
+  }
+
+  async retryDocument(
+    documentId: string,
+    idempotencyKey: string,
+  ): Promise<ConsultationDocument> {
+    await this.delay(300);
+
+    const cached = this.retryOutcomes.get(idempotencyKey);
+    if (cached) {
+      return cached;
+    }
+
+    const documents = await this.listDocuments();
+    const target = documents.find((document) => document.documentId === documentId);
+
+    if (!target) {
+      throw new Error(`Document ${documentId} not found.`);
+    }
+
+    if (target.status !== 'ERROR') {
+      this.retryOutcomes.set(idempotencyKey, target);
+      return target;
+    }
+
+    const updated: ConsultationDocument = {
+      documentId: target.documentId,
+      summaryId: target.summaryId,
+      patientId: target.patientId,
+      format: 'PDF',
+      status: 'GENERATING',
+      retryCount: target.retryCount + 1,
+      createdAt: target.createdAt,
+    };
+
+    this.retryOutcomes.set(idempotencyKey, updated);
+    return updated;
   }
 
   private delay(milliseconds: number): Promise<void> {
