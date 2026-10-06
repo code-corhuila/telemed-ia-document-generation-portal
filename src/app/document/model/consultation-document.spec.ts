@@ -1,5 +1,21 @@
 import { SyntheticDocumentService } from '../data/synthetic-document.service';
-import { ConsultationDocument } from './consultation-document';
+import {
+  AvailableConsultationDocument,
+  ConsultationDocument,
+  ErrorConsultationDocument,
+} from './consultation-document';
+
+function isAvailable(
+  doc: ConsultationDocument,
+): doc is AvailableConsultationDocument {
+  return doc.status === 'AVAILABLE';
+}
+
+function isError(
+  doc: ConsultationDocument,
+): doc is ErrorConsultationDocument {
+  return doc.status === 'ERROR';
+}
 
 describe('SyntheticDocumentService', () => {
   const service = new SyntheticDocumentService();
@@ -18,27 +34,24 @@ describe('SyntheticDocumentService', () => {
     expect(statuses.has('ERROR')).toBe(true);
   });
 
-  it('only exposes a download URL when status is AVAILABLE', async () => {
+  it('every AVAILABLE document carries downloadUrl and generatedAt', async () => {
     const documents = await service.listDocuments();
     for (const doc of documents) {
-      if (doc.status === 'AVAILABLE') {
-        expect(doc.downloadUrl).not.toBeNull();
-        expect(doc.generatedAt).not.toBeNull();
-      } else {
-        expect(doc.downloadUrl).toBeNull();
-        expect(doc.generatedAt).toBeNull();
+      if (isAvailable(doc)) {
+        expect(typeof doc.downloadUrl).toBe('string');
+        expect(doc.downloadUrl.length).toBeGreaterThan(0);
+        expect(typeof doc.generatedAt).toBe('string');
+        expect(doc.generatedAt.length).toBeGreaterThan(0);
       }
     }
   });
 
-  it('only exposes an error message when status is ERROR', async () => {
-    const documents: readonly ConsultationDocument[] =
-      await service.listDocuments();
+  it('every ERROR document carries an errorMessage', async () => {
+    const documents = await service.listDocuments();
     for (const doc of documents) {
-      if (doc.status === 'ERROR') {
-        expect(doc.errorMessage).not.toBeNull();
-      } else {
-        expect(doc.errorMessage).toBeNull();
+      if (isError(doc)) {
+        expect(typeof doc.errorMessage).toBe('string');
+        expect(doc.errorMessage.length).toBeGreaterThan(0);
       }
     }
   });

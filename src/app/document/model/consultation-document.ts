@@ -10,16 +10,44 @@ import { DocumentStatus } from './document-status';
  * The binary of the PDF never crosses this boundary. When the document is
  * AVAILABLE, `downloadUrl` carries a short-lived presigned URL issued by
  * the -api; the storage reference itself is not exposed to the client.
+ *
+ * The type is a discriminated union on `status` so that the nullability
+ * invariants are enforced by the type system rather than by convention:
+ *   - AVAILABLE implies non-null downloadUrl and generatedAt.
+ *   - ERROR implies non-null errorMessage.
+ *   - PENDING and GENERATING carry neither.
  */
-export interface ConsultationDocument {
+export interface BaseConsultationDocument {
   readonly documentId: string;
   readonly summaryId: string;
   readonly patientId: string;
   readonly format: 'PDF';
-  readonly status: DocumentStatus;
-  readonly errorMessage: string | null;
   readonly retryCount: number;
-  readonly generatedAt: string | null;
   readonly createdAt: string;
-  readonly downloadUrl: string | null;
 }
+
+export interface PendingConsultationDocument extends BaseConsultationDocument {
+  readonly status: 'PENDING';
+}
+
+export interface GeneratingConsultationDocument
+  extends BaseConsultationDocument {
+  readonly status: 'GENERATING';
+}
+
+export interface AvailableConsultationDocument extends BaseConsultationDocument {
+  readonly status: 'AVAILABLE';
+  readonly downloadUrl: string;
+  readonly generatedAt: string;
+}
+
+export interface ErrorConsultationDocument extends BaseConsultationDocument {
+  readonly status: 'ERROR';
+  readonly errorMessage: string;
+}
+
+export type ConsultationDocument =
+  | PendingConsultationDocument
+  | GeneratingConsultationDocument
+  | AvailableConsultationDocument
+  | ErrorConsultationDocument;
