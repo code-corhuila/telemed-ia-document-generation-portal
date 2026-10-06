@@ -1,0 +1,106 @@
+<section class="documents">
+  <header class="documents__header">
+    <h1 class="documents__title">Mis Documentos</h1>
+    <p class="documents__subtitle">
+      Consulta y descarga los resúmenes de tus consultas.
+    </p>
+  </header>
+
+  @if (viewState() === 'loading') {
+    <div class="documents__state" data-testid="documents-loading">
+      <p class="documents__state-text">Cargando documentos...</p>
+    </div>
+  } @else if (viewState() === 'error') {
+    <div class="documents__state" data-testid="documents-error">
+      <p class="documents__state-text">
+        No pudimos cargar tus documentos. Intenta de nuevo.
+      </p>
+      <button
+        type="button"
+        class="btn btn--primary"
+        data-testid="documents-retry-load"
+        (click)="retryLoad()"
+      >
+        Reintentar
+      </button>
+    </div>
+  } @else if (viewState() === 'empty') {
+    <div class="documents__state" data-testid="documents-empty">
+      <p class="documents__state-icon" aria-hidden="true">📄</p>
+      <p class="documents__state-text">
+        Aún no tienes documentos generados.
+      </p>
+    </div>
+  } @else {
+    <ul class="documents__list" data-testid="documents-list">
+      @for (doc of documents(); track doc.documentId) {
+        <li class="document-card">
+          <header class="document-card__header">
+            <span class="document-card__icon" aria-hidden="true">📄</span>
+            <div>
+              <h2 class="document-card__title">Resumen de consulta</h2>
+              <p class="document-card__meta">
+                Solicitado el {{ formatDate(doc.createdAt) }}
+              </p>
+            </div>
+          </header>
+
+          @switch (doc.status) {
+            @case ('AVAILABLE') {
+              <div class="document-card__body">
+                <span class="chip chip--available">Disponible</span>
+                <p class="document-card__meta">
+                  Generado el {{ formatDate(doc.generatedAt) }}
+                </p>
+              </div>
+              <div class="document-card__actions">
+                <button
+                  type="button"
+                  class="btn btn--primary"
+                  data-testid="document-download"
+                >
+                  Descargar PDF
+                </button>
+              </div>
+            }
+            @case ('GENERATING') {
+              <div class="document-card__body">
+                <span class="chip chip--generating">
+                  <span class="chip__spinner" aria-hidden="true">⟳</span>
+                  Generando PDF...
+                </span>
+              </div>
+            }
+            @case ('PENDING') {
+              <div class="document-card__body">
+                <span class="chip chip--pending">En cola</span>
+              </div>
+            }
+            @case ('ERROR') {
+              <div class="document-card__body">
+                <span class="chip chip--error">
+                  <span aria-hidden="true">⚠</span> Error
+                </span>
+                <p class="document-card__error">
+                  {{ doc.errorMessage }}
+                </p>
+                <p class="document-card__meta">
+                  Reintentos: {{ doc.retryCount }}
+                </p>
+              </div>
+              <div class="document-card__actions">
+                <button
+                  type="button"
+                  class="btn btn--secondary"
+                  data-testid="document-retry"
+                >
+                  Reintentar
+                </button>
+              </div>
+            }
+          }
+        </li>
+      }
+    </ul>
+  }
+</section>
