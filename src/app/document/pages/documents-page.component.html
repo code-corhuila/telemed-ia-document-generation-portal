@@ -58,10 +58,14 @@
                   type="button"
                   class="btn btn--primary"
                   data-testid="document-download"
-                  disabled
-                  title="Próximamente en la siguiente entrega"
+                  [disabled]="downloadingDocumentId() === doc.documentId"
+                  (click)="downloadDocument(doc)"
                 >
-                  Descargar PDF
+                  @if (downloadingDocumentId() === doc.documentId) {
+                    Descargando...
+                  } @else {
+                    Descargar PDF
+                  }
                 </button>
               </div>
             }
@@ -95,8 +99,14 @@
                   type="button"
                   class="btn btn--secondary"
                   data-testid="document-retry"
+                  [disabled]="retryingDocumentId() === doc.documentId"
+                  (click)="retryDocument(doc)"
                 >
-                  Reintentar
+                  @if (retryingDocumentId() === doc.documentId) {
+                    Reintentando...
+                  } @else {
+                    Reintentar
+                  }
                 </button>
               </div>
             }

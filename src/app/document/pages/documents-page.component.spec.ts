@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { vi } from 'vitest';
 
 import {
   DOCUMENT_DATA_SOURCE,
@@ -13,6 +14,18 @@ function buildMockSource(
   return {
     listDocuments: () =>
       result instanceof Error ? Promise.reject(result) : Promise.resolve(result),
+    downloadDocument: () =>
+      Promise.resolve(new Blob(['%PDF-1.4\n'], { type: 'application/pdf' })),
+    retryDocument: (documentId: string, _idempotencyKey: string) =>
+      Promise.resolve({
+        documentId,
+        summaryId: 'sum-1',
+        patientId: 'pat-1',
+        format: 'PDF',
+        status: 'GENERATING',
+        retryCount: 1,
+        createdAt: '2026-09-28T18:30:00Z',
+      }),
   };
 }
 
@@ -49,6 +62,9 @@ describe('DocumentsPageComponent', () => {
   it('starts in loading state', async () => {
     const source: DocumentDataSource = {
       listDocuments: () => new Promise(() => {}),
+      downloadDocument: () =>
+        Promise.resolve(new Blob([], { type: 'application/pdf' })),
+      retryDocument: () => Promise.reject(new Error('Not used in this test.')),
     };
     const component = await setup(source);
     expect(component.viewState()).toBe('loading');
@@ -78,5 +94,51 @@ describe('DocumentsPageComponent', () => {
     expect(component.formatDate('2026-09-20T09:05:00Z')).toBe(
       '20 de septiembre de 2026',
     );
+  });
+
+  it('downloadDocument triggers a Blob download when status is AVAILABLE', async () => {
+    const component = await setup(buildMockSource([oneAvailable]));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const createObjectUrl = vi
+      .spyOn(URL, 'createObjectURL')
+      .mockReturnValue('blob:test');
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => {});
+
+    await component.downloadDocument(oneAvailable);
+
+    expect(createObjectUrl).toHaveBeenCalledWith(
+      expect.any(Blob),
+    );
+    expect(click).toHaveBeenCalled();
+    expect(component.downloadingDocumentId()).toBeNull();
+    vi.restoreAllMocks();
+  });
+
+  it('retryDocument replaces the document with the updated one', async () => {
+    const source = buildMockSource([oneAvailable]);
+    const retry = vi.spyOn(source, 'retryDocument');
+    const component = await setup(source);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const errorDoc: ConsultationDocument = {
+      documentId: 'doc-error',
+      summaryId: 'sum-2',
+      patientId: 'pat-1',
+      format: 'PDF',
+      status: 'ERROR',
+      errorMessage: 'boom',
+      retryCount: 2,
+      createdAt: '2026-09-28T18:30:00Z',
+    };
+    component.documents.set([errorDoc]);
+
+    await component.retryDocument(errorDoc);
+
+    expect(retry).toHaveBeenCalledWith('doc-error', expect.any(String));
+    expect(component.documents()[0].status).toBe('GENERATING');
+    expect(component.retryingDocumentId()).toBeNull();
   });
 });

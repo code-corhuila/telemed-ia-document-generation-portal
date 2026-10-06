@@ -83,6 +83,46 @@ export class SyntheticDocumentService implements DocumentDataSource {
     return [available1, generating, pending, error, available2];
   }
 
+  async downloadDocument(_documentId: string): Promise<Blob> {
+    await this.delay(200);
+
+    const minimalPdf =
+      '%PDF-1.4\n' +
+      '1 0 obj<</Type/Catalog>>endobj\n' +
+      'trailer<</Root 1 0 R>>\n' +
+      '%%EOF\n';
+
+    return new Blob([minimalPdf], { type: 'application/pdf' });
+  }
+
+  async retryDocument(
+    documentId: string,
+    _idempotencyKey: string,
+  ): Promise<ConsultationDocument> {
+    await this.delay(300);
+
+    const documents = await this.listDocuments();
+    const target = documents.find((document) => document.documentId === documentId);
+
+    if (!target) {
+      throw new Error(`Document ${documentId} not found.`);
+    }
+
+    if (target.status !== 'ERROR') {
+      return target;
+    }
+
+    return {
+      documentId: target.documentId,
+      summaryId: target.summaryId,
+      patientId: target.patientId,
+      format: 'PDF',
+      status: 'GENERATING',
+      retryCount: target.retryCount + 1,
+      createdAt: target.createdAt,
+    };
+  }
+
   private delay(milliseconds: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, milliseconds));
   }
