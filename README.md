@@ -33,3 +33,22 @@ npm start   # runs on port 4204
 - telemed-ia-docs/00-governance/branching-policy.md
 - telemed-ia-docs/05-architecture/decisions/records/
 - Anexo H of the repo norm.
+
+## Known gaps
+
+- **`downloadUrl` expiration is not modeled.** The presigned URL is
+  short-lived by contract with the `-api`, but the portal does not yet
+  know when it expires. An `expiresAt` field may be added in PR #4 when
+  the download flow is implemented and the portal needs to detect an
+  expired URL and re-request it.
+
+- **`DocumentDataSource` does not declare a failure contract yet.** The
+  port returns a bare `Promise<readonly ConsultationDocument[]>`. The
+  real adapter (in PR #4) will reject with the shell's `ApiError`; the
+  contract will be made explicit at that point, when there is an actual
+  failure path to exercise.
+
+- **The `ConsultationDocument` test suite validates the mock's output,
+  not an extractable domain invariant.** Once the real adapter exists,
+  the nullability rules enforced by the discriminated union will be
+  tested against the adapter's output, not just the fixture data.
