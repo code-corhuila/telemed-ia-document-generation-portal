@@ -22,6 +22,8 @@ import { DocumentDataSource } from './document-data-source';
  */
 @Injectable()
 export class SyntheticDocumentService implements DocumentDataSource {
+  private readonly retryOutcomes = new Map<string, ConsultationDocument>();
+
   async listDocuments(): Promise<readonly ConsultationDocument[]> {
     await this.delay(400);
 
@@ -97,9 +99,14 @@ export class SyntheticDocumentService implements DocumentDataSource {
 
   async retryDocument(
     documentId: string,
-    _idempotencyKey: string,
+    idempotencyKey: string,
   ): Promise<ConsultationDocument> {
     await this.delay(300);
+
+    const cached = this.retryOutcomes.get(idempotencyKey);
+    if (cached) {
+      return cached;
+    }
 
     const documents = await this.listDocuments();
     const target = documents.find((document) => document.documentId === documentId);
@@ -109,10 +116,11 @@ export class SyntheticDocumentService implements DocumentDataSource {
     }
 
     if (target.status !== 'ERROR') {
+      this.retryOutcomes.set(idempotencyKey, target);
       return target;
     }
 
-    return {
+    const updated: ConsultationDocument = {
       documentId: target.documentId,
       summaryId: target.summaryId,
       patientId: target.patientId,
@@ -121,6 +129,9 @@ export class SyntheticDocumentService implements DocumentDataSource {
       retryCount: target.retryCount + 1,
       createdAt: target.createdAt,
     };
+
+    this.retryOutcomes.set(idempotencyKey, updated);
+    return updated;
   }
 
   private delay(milliseconds: number): Promise<void> {
