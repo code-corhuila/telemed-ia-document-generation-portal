@@ -9,7 +9,6 @@ import {
   DOCUMENT_DATA_SOURCE,
   DocumentDataSource,
 } from '../data/document-data-source';
-import { SyntheticDocumentService } from '../data/synthetic-document.service';
 import { ConsultationDocument } from '../model/consultation-document';
 
 type ViewState = 'loading' | 'error' | 'empty' | 'data';
@@ -20,13 +19,6 @@ type ViewState = 'loading' | 'error' | 'empty' | 'data';
   templateUrl: './documents-page.component.html',
   styleUrl: './documents-page.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  providers: [
-    SyntheticDocumentService,
-    {
-      provide: DOCUMENT_DATA_SOURCE,
-      useExisting: SyntheticDocumentService,
-    },
-  ],
 })
 export class DocumentsPageComponent {
   private readonly dataSource: DocumentDataSource =
