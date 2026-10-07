@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
 
 import {
@@ -41,21 +41,18 @@ const oneAvailable: ConsultationDocument = {
   generatedAt: '2026-09-20T09:05:00Z',
 };
 
-async function setup(
-  source: DocumentDataSource,
-): Promise<DocumentsPageComponent> {
+async function setup(source: DocumentDataSource): Promise<{
+  component: DocumentsPageComponent;
+  fixture: ComponentFixture<DocumentsPageComponent>;
+}> {
   await TestBed.configureTestingModule({
     imports: [DocumentsPageComponent],
-  })
-    .overrideComponent(DocumentsPageComponent, {
-      set: {
-        providers: [{ provide: DOCUMENT_DATA_SOURCE, useValue: source }],
-      },
-    })
-    .compileComponents();
+    providers: [{ provide: DOCUMENT_DATA_SOURCE, useValue: source }],
+  }).compileComponents();
 
   const fixture = TestBed.createComponent(DocumentsPageComponent);
-  return fixture.componentInstance;
+  fixture.detectChanges();
+  return { component: fixture.componentInstance, fixture };
 }
 
 describe('DocumentsPageComponent', () => {
@@ -66,38 +63,38 @@ describe('DocumentsPageComponent', () => {
         Promise.resolve(new Blob([], { type: 'application/pdf' })),
       retryDocument: () => Promise.reject(new Error('Not used in this test.')),
     };
-    const component = await setup(source);
+    const { component } = await setup(source);
     expect(component.viewState()).toBe('loading');
   });
 
   it('reaches empty state when the source returns no documents', async () => {
-    const component = await setup(buildMockSource([]));
+    const { component } = await setup(buildMockSource([]));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(component.viewState()).toBe('empty');
   });
 
   it('reaches data state when the source returns documents', async () => {
-    const component = await setup(buildMockSource([oneAvailable]));
+    const { component } = await setup(buildMockSource([oneAvailable]));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(component.viewState()).toBe('data');
     expect(component.documents().length).toBe(1);
   });
 
   it('reaches error state when the source rejects', async () => {
-    const component = await setup(buildMockSource(new Error('boom')));
+    const { component } = await setup(buildMockSource(new Error('boom')));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(component.viewState()).toBe('error');
   });
 
   it('formats ISO dates in es-CO', async () => {
-    const component = await setup(buildMockSource([]));
+    const { component } = await setup(buildMockSource([]));
     expect(component.formatDate('2026-09-20T09:05:00Z')).toBe(
       '20 de septiembre de 2026',
     );
   });
 
   it('downloadDocument triggers a Blob download when status is AVAILABLE', async () => {
-    const component = await setup(buildMockSource([oneAvailable]));
+    const { component } = await setup(buildMockSource([oneAvailable]));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     const createObjectUrl = vi
@@ -120,7 +117,7 @@ describe('DocumentsPageComponent', () => {
   it('retryDocument replaces the document with the updated one', async () => {
     const source = buildMockSource([oneAvailable]);
     const retry = vi.spyOn(source, 'retryDocument');
-    const component = await setup(source);
+    const { component } = await setup(source);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     const errorDoc: ConsultationDocument = {
@@ -142,14 +139,22 @@ describe('DocumentsPageComponent', () => {
     expect(component.retryingDocumentId()).toBeNull();
   });
 
-  it('shows the counter with singular when there is one document', async () => {
-    const component = await setup(buildMockSource([oneAvailable]));
+  it('renders "documento" (singular) when there is exactly one document', async () => {
+    const { fixture, component } = await setup(buildMockSource([oneAvailable]));
     await new Promise((r) => setTimeout(r, 0));
+    fixture.detectChanges();
+
     expect(component.viewState()).toBe('data');
-    expect(component.documents().length).toBe(1);
+
+    const counter = fixture.nativeElement.querySelector(
+      '.documents__counter',
+    ) as HTMLElement | null;
+    expect(counter).not.toBeNull();
+    expect(counter?.textContent?.trim()).toContain('1 documento');
+    expect(counter?.textContent?.trim()).not.toContain('documentos');
   });
 
-  it('shows the counter with plural when there are multiple documents', async () => {
+  it('renders "documentos" (plural) when there are multiple documents', async () => {
     const documents: ConsultationDocument[] = [
       oneAvailable,
       {
@@ -162,9 +167,16 @@ describe('DocumentsPageComponent', () => {
         createdAt: '2026-09-22T10:00:00Z',
       },
     ];
-    const component = await setup(buildMockSource(documents));
+    const { fixture, component } = await setup(buildMockSource(documents));
     await new Promise((r) => setTimeout(r, 0));
+    fixture.detectChanges();
+
     expect(component.viewState()).toBe('data');
-    expect(component.documents().length).toBe(2);
+
+    const counter = fixture.nativeElement.querySelector(
+      '.documents__counter',
+    ) as HTMLElement | null;
+    expect(counter).not.toBeNull();
+    expect(counter?.textContent?.trim()).toContain('2 documentos');
   });
 });
