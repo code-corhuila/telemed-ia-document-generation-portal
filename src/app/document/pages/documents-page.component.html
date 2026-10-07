@@ -1,9 +1,17 @@
 <section class="documents">
   <header class="documents__header">
-    <h1 class="documents__title">Mis Documentos</h1>
-    <p class="documents__subtitle">
-      Consulta y descarga los resúmenes de tus consultas.
-    </p>
+    <div>
+      <h1 class="documents__title">Mis Documentos</h1>
+      <p class="documents__subtitle">
+        Consulta y descarga los resúmenes de tus consultas.
+      </p>
+    </div>
+    @if (viewState() === 'data') {
+      <span class="documents__counter">
+        {{ documents().length }}
+        {{ documents().length === 1 ? 'documento' : 'documentos' }}
+      </span>
+    }
   </header>
 
   @if (viewState() === 'loading') {
@@ -79,7 +87,7 @@
             }
             @case ('PENDING') {
               <div class="document-card__body">
-                <span class="chip chip--pending">En cola</span>
+                <span class="chip chip--pending">Pendiente</span>
               </div>
             }
             @case ('ERROR') {
@@ -90,14 +98,14 @@
                 <p class="document-card__error">
                   {{ doc.errorMessage }}
                 </p>
-                <p class="document-card__meta">
+                <p class="document-card__meta document-card__meta--error">
                   Reintentos: {{ doc.retryCount }}
                 </p>
               </div>
               <div class="document-card__actions">
                 <button
                   type="button"
-                  class="btn btn--secondary"
+                  class="btn btn--danger"
                   data-testid="document-retry"
                   [disabled]="retryingDocumentId() === doc.documentId"
                   (click)="retryDocument(doc)"
