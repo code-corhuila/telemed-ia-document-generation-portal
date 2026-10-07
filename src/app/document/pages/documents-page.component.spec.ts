@@ -141,4 +141,30 @@ describe('DocumentsPageComponent', () => {
     expect(component.documents()[0].status).toBe('GENERATING');
     expect(component.retryingDocumentId()).toBeNull();
   });
+
+  it('shows the counter with singular when there is one document', async () => {
+    const component = await setup(buildMockSource([oneAvailable]));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(component.viewState()).toBe('data');
+    expect(component.documents().length).toBe(1);
+  });
+
+  it('shows the counter with plural when there are multiple documents', async () => {
+    const documents: ConsultationDocument[] = [
+      oneAvailable,
+      {
+        documentId: 'doc-2',
+        summaryId: 'sum-2',
+        patientId: 'pat-1',
+        format: 'PDF',
+        status: 'GENERATING',
+        retryCount: 0,
+        createdAt: '2026-09-22T10:00:00Z',
+      },
+    ];
+    const component = await setup(buildMockSource(documents));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(component.viewState()).toBe('data');
+    expect(component.documents().length).toBe(2);
+  });
 });
