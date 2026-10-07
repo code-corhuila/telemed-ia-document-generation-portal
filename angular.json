@@ -30,9 +30,7 @@
             "polyfills": ["es-module-shims"],
             "tsConfig": "tsconfig.app.json",
             "assets": [{ "glob": "**/*", "input": "public" }],
-            "styles": [
-              "src/styles.css"
-            ]
+            "styles": []
           },
           "configurations": {
             "production": { "outputHashing": "all" },
