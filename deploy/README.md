@@ -24,6 +24,17 @@ The portal is served at http://localhost:4204/.
     cd deploy
     docker compose down --rmi local
 
+## Image tagging
+
+The compose file uses IMAGE_TAG with a default of `dev`. To build a
+specific tag:
+
+    IMAGE_TAG=v1.0.0 docker compose up --build -d
+
+This keeps the container name and image tag in sync with the release
+version, so the running container can be traced back to a specific
+build. Without IMAGE_TAG, the default `dev` tag is used for local work.
+
 ## Verifying the shell fallback
 
 With the shell (telemed-ia-front) running on http://localhost:4200 and
