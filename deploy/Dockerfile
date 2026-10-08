@@ -15,12 +15,11 @@ RUN npm run build
 
 # Stage 2: serve
 FROM nginx:1.27-alpine AS serve
-# The Angular build outputs the served assets under dist/document/browser/
-# (the root of dist/document/ only holds 3rdpartylicenses.txt and
-# prerendered-routes.json). Copy the contents of browser/ directly into
-# nginx's web root so /remoteEntry.json and /index.html are at the top
-# level, which is what the shell expects.
 COPY --from=build /app/dist/document/browser/ /usr/share/nginx/html/
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
+
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget -qO- http://localhost:80/remoteEntry.json >/dev/null 2>&1 || exit 1
+
 CMD ["nginx", "-g", "daemon off;"]
