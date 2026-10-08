@@ -3,8 +3,8 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
-    image: telemed-ia-document-generation-portal:latest
-    container_name: telemed-document-generation-portal
+    image: telemed-ia-document-generation-portal:${IMAGE_TAG:-dev}
+    container_name: telemed-document-generation-portal-${IMAGE_TAG:-dev}
     ports:
       - "4204:80"
     restart: unless-stopped
