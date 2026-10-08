@@ -34,6 +34,11 @@ npm start   # runs on port 4204
 - telemed-ia-docs/05-architecture/decisions/records/
 - Anexo H of the repo norm.
 
+## Deploy
+
+See [deploy/README.md](deploy/README.md) for instructions to build
+and run the portal as a Docker container.
+
 ## Known gaps
 
 - **`downloadUrl` expiration is not modeled.** The presigned URL is
