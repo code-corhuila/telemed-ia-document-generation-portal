@@ -3,4 +3,5 @@ dist/
 .angular/
 .env
 *.log
+deploy/*.log
 *.pem
