@@ -57,3 +57,16 @@ and run the portal as a Docker container.
   not an extractable domain invariant.** Once the real adapter exists,
   the nullability rules enforced by the discriminated union will be
   tested against the adapter's output, not just the fixture data.
+
+## Tags
+
+- **v2.0.0** (corte 2): first tagged release of the portal. Angular 21 +
+  Native Federation remote integrated with the shell (`telemed-ia-front`).
+  Includes the four view states, download and retry actions backed by an
+  in-memory mock, the NG0201 route-level provider fix with its regression
+  test, and a Docker deploy with restricted CORS and a healthcheck.
+
+  **Scope:** corte-2 deliverable. The synthetic data adapter is intentional
+  because the `document-generation-api` does not exist yet. Corte 3 will
+  introduce the API, swap the provider to an HTTP adapter, add contract
+  tests, and tag `v3.0.0`.
