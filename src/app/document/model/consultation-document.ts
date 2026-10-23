@@ -1,24 +1,21 @@
 import { DocumentStatus } from './document-status';
 
 /**
- * Metadata of a PDF generated for a consultation summary.
+ * Metadata of a PDF generated for a consultation summary: the
+ * `ConsultationDocument` schema of `07-api/contracts/openapi/document-service.yaml`.
  *
- * This is the mirror of the -api contract. It contains no clinical
- * information: no doctor, no specialty, no consultation date. That data
- * lives in consultation-service and is deliberately out of scope here.
+ * It contains no clinical information: no doctor, no specialty, no
+ * consultation date. That data lives in consultation-service.
  *
- * The binary of the PDF never crosses this boundary. When the document is
- * AVAILABLE, `downloadUrl` carries a short-lived presigned URL issued by
- * the -api; the storage reference itself is not exposed to the client.
+ * The API never returns the PDF, its storage reference or the internal error
+ * message (ADR-015). A download URL is requested separately and is valid for
+ * five minutes, so it is not part of this model.
  *
- * The type is a discriminated union on `status` so that the nullability
- * invariants are enforced by the type system rather than by convention:
- *   - AVAILABLE implies non-null downloadUrl and generatedAt.
- *   - ERROR implies non-null errorMessage.
- *   - PENDING and GENERATING carry neither.
+ * The type is a discriminated union on `status`, so the invariant of the
+ * contract is enforced by the type system: only AVAILABLE has `generatedAt`.
  */
 export interface BaseConsultationDocument {
-  readonly documentId: string;
+  readonly id: string;
   readonly summaryId: string;
   readonly patientId: string;
   readonly format: 'PDF';
@@ -37,13 +34,12 @@ export interface GeneratingConsultationDocument
 
 export interface AvailableConsultationDocument extends BaseConsultationDocument {
   readonly status: 'AVAILABLE';
-  readonly downloadUrl: string;
   readonly generatedAt: string;
 }
 
+/** Generation ran out of its retries (DEC-005); there is no manual retry. */
 export interface ErrorConsultationDocument extends BaseConsultationDocument {
   readonly status: 'ERROR';
-  readonly errorMessage: string;
 }
 
 export type ConsultationDocument =
@@ -51,3 +47,10 @@ export type ConsultationDocument =
   | GeneratingConsultationDocument
   | AvailableConsultationDocument
   | ErrorConsultationDocument;
+
+export const DOCUMENT_STATUSES: readonly DocumentStatus[] = [
+  'PENDING',
+  'GENERATING',
+  'AVAILABLE',
+  'ERROR',
+];
