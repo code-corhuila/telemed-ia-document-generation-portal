@@ -51,12 +51,12 @@ function pageOf(
 
 function sourceReturning(
   result: DocumentPage | Error,
-  downloadUrl: Promise<string> = Promise.resolve('https://storage.test/doc-1.pdf'),
+  downloadUrl: () => Promise<string> = () => Promise.resolve('https://storage.test/doc-1.pdf'),
 ): DocumentDataSource {
   return {
     listDocuments: () =>
       result instanceof Error ? Promise.reject(result) : Promise.resolve(result),
-    getDownloadUrl: () => downloadUrl,
+    getDownloadUrl: downloadUrl,
   };
 }
 
@@ -179,7 +179,7 @@ describe('DocumentsPageComponent', () => {
     it('disables the button while the URL is requested', async () => {
       vi.spyOn(window, 'open').mockReturnValue(null);
       const { component, fixture } = await setup(
-        sourceReturning(pageOf([available]), new Promise(() => {})),
+        sourceReturning(pageOf([available]), () => new Promise(() => {})),
       );
       await settle(fixture);
 
@@ -194,7 +194,7 @@ describe('DocumentsPageComponent', () => {
       const { component, fixture } = await setup(
         sourceReturning(
           pageOf([available]),
-          Promise.reject({ status: 503, code: 'SERVICE_UNAVAILABLE', message: 'storage unavailable', traceId: 't-1' }),
+          () => Promise.reject({ status: 503, code: 'SERVICE_UNAVAILABLE', message: 'storage unavailable', traceId: 't-1' }),
         ),
       );
       await settle(fixture);
