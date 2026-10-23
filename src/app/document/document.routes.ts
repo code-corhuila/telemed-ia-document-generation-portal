@@ -1,7 +1,7 @@
 import { Routes } from '@angular/router';
 
 import { DOCUMENT_DATA_SOURCE } from './data/document-data-source';
-import { SyntheticDocumentService } from './data/synthetic-document.service';
+import { HttpDocumentService } from './data/http-document.service';
 
 /**
  * Route table exposed to the shell via Module Federation (`./routes`).
@@ -23,10 +23,11 @@ export const DOCUMENT_ROUTES: Routes = [
   {
     path: '',
     providers: [
-      SyntheticDocumentService,
+      // Uses the HttpClient of the shell (Anexo H); the portal never provides one.
+      HttpDocumentService,
       {
         provide: DOCUMENT_DATA_SOURCE,
-        useExisting: SyntheticDocumentService,
+        useExisting: HttpDocumentService,
       },
     ],
     loadComponent: () =>
