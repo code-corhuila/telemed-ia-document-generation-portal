@@ -1,45 +1,64 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   DOCUMENT_DATA_SOURCE,
   DocumentDataSource,
+  DocumentPage,
 } from '../data/document-data-source';
 import { ConsultationDocument } from '../model/consultation-document';
 import { DocumentsPageComponent } from './documents-page.component';
 
-function buildMockSource(
-  result: readonly ConsultationDocument[] | Error,
-): DocumentDataSource {
-  return {
-    listDocuments: () =>
-      result instanceof Error ? Promise.reject(result) : Promise.resolve(result),
-    downloadDocument: () =>
-      Promise.resolve(new Blob(['%PDF-1.4\n'], { type: 'application/pdf' })),
-    retryDocument: (documentId: string, _idempotencyKey: string) =>
-      Promise.resolve({
-        documentId,
-        summaryId: 'sum-1',
-        patientId: 'pat-1',
-        format: 'PDF',
-        status: 'GENERATING',
-        retryCount: 1,
-        createdAt: '2026-09-28T18:30:00Z',
-      }),
-  };
-}
-
-const oneAvailable: ConsultationDocument = {
-  documentId: 'doc-1',
+const available: ConsultationDocument = {
+  id: 'doc-1',
   summaryId: 'sum-1',
   patientId: 'pat-1',
   format: 'PDF',
   status: 'AVAILABLE',
   retryCount: 0,
   createdAt: '2026-09-20T09:02:00Z',
-  downloadUrl: 'https://example.invalid/presigned/1',
   generatedAt: '2026-09-20T09:05:00Z',
 };
+
+const generating: ConsultationDocument = {
+  id: 'doc-2',
+  summaryId: 'sum-2',
+  patientId: 'pat-1',
+  format: 'PDF',
+  status: 'GENERATING',
+  retryCount: 0,
+  createdAt: '2026-09-22T10:00:00Z',
+};
+
+const failed: ConsultationDocument = {
+  id: 'doc-3',
+  summaryId: 'sum-3',
+  patientId: 'pat-1',
+  format: 'PDF',
+  status: 'ERROR',
+  retryCount: 3,
+  createdAt: '2026-09-28T18:30:00Z',
+};
+
+function pageOf(
+  documents: readonly ConsultationDocument[],
+  page = 1,
+  totalPages = 1,
+  total = documents.length,
+): DocumentPage {
+  return { documents, page, totalPages, total };
+}
+
+function sourceReturning(
+  result: DocumentPage | Error,
+  downloadUrl: Promise<string> = Promise.resolve('https://storage.test/doc-1.pdf'),
+): DocumentDataSource {
+  return {
+    listDocuments: () =>
+      result instanceof Error ? Promise.reject(result) : Promise.resolve(result),
+    getDownloadUrl: () => downloadUrl,
+  };
+}
 
 async function setup(source: DocumentDataSource): Promise<{
   component: DocumentsPageComponent;
@@ -55,128 +74,175 @@ async function setup(source: DocumentDataSource): Promise<{
   return { component: fixture.componentInstance, fixture };
 }
 
+async function settle(fixture: ComponentFixture<DocumentsPageComponent>): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  fixture.detectChanges();
+}
+
+function query(
+  fixture: ComponentFixture<DocumentsPageComponent>,
+  selector: string,
+): HTMLElement | null {
+  return fixture.nativeElement.querySelector(selector) as HTMLElement | null;
+}
+
 describe('DocumentsPageComponent', () => {
-  it('starts in loading state', async () => {
-    const source: DocumentDataSource = {
-      listDocuments: () => new Promise(() => {}),
-      downloadDocument: () =>
-        Promise.resolve(new Blob([], { type: 'application/pdf' })),
-      retryDocument: () => Promise.reject(new Error('Not used in this test.')),
-    };
-    const { component } = await setup(source);
-    expect(component.viewState()).toBe('loading');
+  afterEach(() => vi.restoreAllMocks());
+
+  describe('view states (Anexo H)', () => {
+    it('starts loading', async () => {
+      const { component } = await setup({
+        listDocuments: () => new Promise(() => {}),
+        getDownloadUrl: () => Promise.reject(new Error('not used')),
+      });
+
+      expect(component.viewState()).toBe('loading');
+    });
+
+    it('shows the empty state when the patient has no documents', async () => {
+      const { component, fixture } = await setup(sourceReturning(pageOf([])));
+      await settle(fixture);
+
+      expect(component.viewState()).toBe('empty');
+      expect(query(fixture, '[data-testid="documents-empty"]')).not.toBeNull();
+    });
+
+    it('shows the documents of the first page', async () => {
+      const listDocuments = vi.fn(() => Promise.resolve(pageOf([available, generating])));
+      const { component, fixture } = await setup({
+        listDocuments,
+        getDownloadUrl: () => Promise.reject(new Error('not used')),
+      });
+      await settle(fixture);
+
+      expect(listDocuments).toHaveBeenCalledWith(1);
+      expect(component.viewState()).toBe('data');
+      expect(component.documents().map((document) => document.id)).toEqual(['doc-1', 'doc-2']);
+    });
+
+    it('shows the error state and loads again on retry', async () => {
+      const listDocuments = vi
+        .fn<DocumentDataSource['listDocuments']>()
+        .mockRejectedValueOnce(new Error('network'))
+        .mockResolvedValueOnce(pageOf([available]));
+      const { component, fixture } = await setup({
+        listDocuments,
+        getDownloadUrl: () => Promise.reject(new Error('not used')),
+      });
+      await settle(fixture);
+      expect(component.viewState()).toBe('error');
+
+      query(fixture, '[data-testid="documents-retry-load"]')?.click();
+      await settle(fixture);
+
+      expect(component.viewState()).toBe('data');
+    });
   });
 
-  it('reaches empty state when the source returns no documents', async () => {
-    const { component } = await setup(buildMockSource([]));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(component.viewState()).toBe('empty');
+  it('keeps the answer of the newest request when an older one arrives later', async () => {
+    let answerFirst: (page: DocumentPage) => void = () => {};
+    const listDocuments = vi
+      .fn<DocumentDataSource['listDocuments']>()
+      .mockReturnValueOnce(new Promise((resolve) => (answerFirst = resolve)))
+      .mockResolvedValueOnce(pageOf([generating]));
+    const { component, fixture } = await setup({
+      listDocuments,
+      getDownloadUrl: () => Promise.reject(new Error('not used')),
+    });
+
+    await component.retryLoad();
+    answerFirst(pageOf([available]));
+    await settle(fixture);
+
+    expect(component.documents().map((document) => document.id)).toEqual(['doc-2']);
   });
 
-  it('reaches data state when the source returns documents', async () => {
-    const { component } = await setup(buildMockSource([oneAvailable]));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(component.viewState()).toBe('data');
-    expect(component.documents().length).toBe(1);
+  it('counts every document of the patient, not only the loaded page', async () => {
+    const { fixture } = await setup(sourceReturning(pageOf([available], 1, 2, 21)));
+    await settle(fixture);
+
+    expect(query(fixture, '.documents__counter')?.textContent?.trim()).toBe('21 documentos');
   });
 
-  it('reaches error state when the source rejects', async () => {
-    const { component } = await setup(buildMockSource(new Error('boom')));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(component.viewState()).toBe('error');
+  describe('download', () => {
+    it('opens the short-lived URL issued by the API', async () => {
+      const open = vi.spyOn(window, 'open').mockReturnValue(null);
+      const { component, fixture } = await setup(sourceReturning(pageOf([available])));
+      await settle(fixture);
+
+      await component.downloadDocument(available);
+
+      expect(open).toHaveBeenCalledWith('https://storage.test/doc-1.pdf', '_blank', 'noopener');
+      expect(component.downloadingDocumentId()).toBeNull();
+    });
+
+    it('disables the button while the URL is requested', async () => {
+      vi.spyOn(window, 'open').mockReturnValue(null);
+      const { component, fixture } = await setup(
+        sourceReturning(pageOf([available]), new Promise(() => {})),
+      );
+      await settle(fixture);
+
+      void component.downloadDocument(available);
+      fixture.detectChanges();
+
+      const button = query(fixture, '[data-testid="document-download"]') as HTMLButtonElement;
+      expect(button.disabled).toBe(true);
+    });
+
+    it('shows the message of the API next to the document when it fails', async () => {
+      const { component, fixture } = await setup(
+        sourceReturning(
+          pageOf([available]),
+          Promise.reject({ status: 503, code: 'SERVICE_UNAVAILABLE', message: 'storage unavailable', traceId: 't-1' }),
+        ),
+      );
+      await settle(fixture);
+
+      await component.downloadDocument(available);
+      fixture.detectChanges();
+
+      const alert = query(fixture, '[data-testid="document-download-error"]');
+      expect(alert?.getAttribute('role')).toBe('alert');
+      expect(alert?.textContent).toContain('storage unavailable');
+      expect(alert?.textContent).toContain('t-1');
+    });
+  });
+
+  it('explains a failed document without offering a retry the API does not have (DEC-005)', async () => {
+    const { fixture } = await setup(sourceReturning(pageOf([failed])));
+    await settle(fixture);
+
+    expect(query(fixture, '[data-testid="document-failed"]')?.textContent).toContain(
+      'No pudimos generar este PDF',
+    );
+    expect(query(fixture, '[data-testid="document-retry"]')).toBeNull();
+  });
+
+  describe('pages', () => {
+    it('loads the next page and appends it until the last one', async () => {
+      const listDocuments = vi
+        .fn<DocumentDataSource['listDocuments']>()
+        .mockResolvedValueOnce(pageOf([available], 1, 2, 2))
+        .mockResolvedValueOnce(pageOf([generating], 2, 2, 2));
+      const { component, fixture } = await setup({
+        listDocuments,
+        getDownloadUrl: () => Promise.reject(new Error('not used')),
+      });
+      await settle(fixture);
+
+      query(fixture, '[data-testid="documents-load-more"]')?.click();
+      await settle(fixture);
+
+      expect(listDocuments).toHaveBeenLastCalledWith(2);
+      expect(component.documents().map((document) => document.id)).toEqual(['doc-1', 'doc-2']);
+      expect(query(fixture, '[data-testid="documents-load-more"]')).toBeNull();
+    });
   });
 
   it('formats ISO dates in es-CO', async () => {
-    const { component } = await setup(buildMockSource([]));
-    expect(component.formatDate('2026-09-20T09:05:00Z')).toBe(
-      '20 de septiembre de 2026',
-    );
-  });
+    const { component } = await setup(sourceReturning(pageOf([])));
 
-  it('downloadDocument triggers a Blob download when status is AVAILABLE', async () => {
-    const { component } = await setup(buildMockSource([oneAvailable]));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    const createObjectUrl = vi
-      .spyOn(URL, 'createObjectURL')
-      .mockReturnValue('blob:test');
-    const click = vi
-      .spyOn(HTMLAnchorElement.prototype, 'click')
-      .mockImplementation(() => {});
-
-    await component.downloadDocument(oneAvailable);
-
-    expect(createObjectUrl).toHaveBeenCalledWith(
-      expect.any(Blob),
-    );
-    expect(click).toHaveBeenCalled();
-    expect(component.downloadingDocumentId()).toBeNull();
-    vi.restoreAllMocks();
-  });
-
-  it('retryDocument replaces the document with the updated one', async () => {
-    const source = buildMockSource([oneAvailable]);
-    const retry = vi.spyOn(source, 'retryDocument');
-    const { component } = await setup(source);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    const errorDoc: ConsultationDocument = {
-      documentId: 'doc-error',
-      summaryId: 'sum-2',
-      patientId: 'pat-1',
-      format: 'PDF',
-      status: 'ERROR',
-      errorMessage: 'boom',
-      retryCount: 2,
-      createdAt: '2026-09-28T18:30:00Z',
-    };
-    component.documents.set([errorDoc]);
-
-    await component.retryDocument(errorDoc);
-
-    expect(retry).toHaveBeenCalledWith('doc-error', expect.any(String));
-    expect(component.documents()[0].status).toBe('GENERATING');
-    expect(component.retryingDocumentId()).toBeNull();
-  });
-
-  it('renders "documento" (singular) when there is exactly one document', async () => {
-    const { fixture, component } = await setup(buildMockSource([oneAvailable]));
-    await new Promise((r) => setTimeout(r, 0));
-    fixture.detectChanges();
-
-    expect(component.viewState()).toBe('data');
-
-    const counter = fixture.nativeElement.querySelector(
-      '.documents__counter',
-    ) as HTMLElement | null;
-    expect(counter).not.toBeNull();
-    expect(counter?.textContent?.trim()).toContain('1 documento');
-    expect(counter?.textContent?.trim()).not.toContain('documentos');
-  });
-
-  it('renders "documentos" (plural) when there are multiple documents', async () => {
-    const documents: ConsultationDocument[] = [
-      oneAvailable,
-      {
-        documentId: 'doc-2',
-        summaryId: 'sum-2',
-        patientId: 'pat-1',
-        format: 'PDF',
-        status: 'GENERATING',
-        retryCount: 0,
-        createdAt: '2026-09-22T10:00:00Z',
-      },
-    ];
-    const { fixture, component } = await setup(buildMockSource(documents));
-    await new Promise((r) => setTimeout(r, 0));
-    fixture.detectChanges();
-
-    expect(component.viewState()).toBe('data');
-
-    const counter = fixture.nativeElement.querySelector(
-      '.documents__counter',
-    ) as HTMLElement | null;
-    expect(counter).not.toBeNull();
-    expect(counter?.textContent?.trim()).toContain('2 documentos');
+    expect(component.formatDate('2026-09-20T09:05:00Z')).toBe('20 de septiembre de 2026');
   });
 });
