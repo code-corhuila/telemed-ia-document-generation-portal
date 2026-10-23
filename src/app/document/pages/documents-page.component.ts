@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   inject,
   signal,
 } from '@angular/core';
@@ -12,6 +13,13 @@ import {
 import { ConsultationDocument } from '../model/consultation-document';
 
 type ViewState = 'loading' | 'error' | 'empty' | 'data';
+
+/** A failed download, shown next to its document. */
+interface DownloadFailure {
+  readonly documentId: string;
+  readonly message: string;
+  readonly traceId?: string;
+}
 
 @Component({
   selector: 'app-documents-page',
@@ -26,10 +34,17 @@ export class DocumentsPageComponent {
 
   readonly viewState = signal<ViewState>('loading');
   readonly documents = signal<readonly ConsultationDocument[]>([]);
+  readonly total = signal(0);
+  readonly loadingMore = signal(false);
   readonly downloadingDocumentId = signal<string | null>(null);
-  readonly retryingDocumentId = signal<string | null>(null);
+  readonly downloadFailure = signal<DownloadFailure | null>(null);
 
-  private readonly retryKeys = new Map<string, string>();
+  private readonly page = signal(1);
+  private readonly totalPages = signal(1);
+  readonly hasMore = computed(() => this.page() < this.totalPages());
+
+  /** Only the answer of the newest request is shown (Anexo H). */
+  private latestRequest = 0;
 
   constructor() {
     void this.load();
@@ -39,51 +54,43 @@ export class DocumentsPageComponent {
     await this.load();
   }
 
-  async downloadDocument(doc: ConsultationDocument): Promise<void> {
-    if (
-      doc.status !== 'AVAILABLE' ||
-      this.downloadingDocumentId() === doc.documentId
-    ) {
+  async loadMore(): Promise<void> {
+    if (this.loadingMore() || !this.hasMore()) {
       return;
     }
-
-    this.downloadingDocumentId.set(doc.documentId);
-
+    const request = ++this.latestRequest;
+    this.loadingMore.set(true);
     try {
-      const blob = await this.dataSource.downloadDocument(doc.documentId);
-      this.triggerBrowserDownload(blob, `${doc.documentId}.pdf`);
-    } catch (error: unknown) {
-      console.error(`Failed to download document ${doc.documentId}.`, error);
+      const next = await this.dataSource.listDocuments(this.page() + 1);
+      if (request !== this.latestRequest) {
+        return;
+      }
+      this.documents.update((current) => [...current, ...next.documents]);
+      this.page.set(next.page);
+      this.totalPages.set(next.totalPages);
+      this.total.set(next.total);
+    } catch {
+      if (request === this.latestRequest) {
+        this.viewState.set('error');
+      }
     } finally {
-      this.downloadingDocumentId.set(null);
+      this.loadingMore.set(false);
     }
   }
 
-  async retryDocument(doc: ConsultationDocument): Promise<void> {
-    if (
-      doc.status !== 'ERROR' ||
-      this.retryingDocumentId() === doc.documentId
-    ) {
+  async downloadDocument(doc: ConsultationDocument): Promise<void> {
+    if (doc.status !== 'AVAILABLE' || this.downloadingDocumentId() === doc.id) {
       return;
     }
-
-    this.retryingDocumentId.set(doc.documentId);
-
-    const idempotencyKey =
-      this.retryKeys.get(doc.documentId) ?? crypto.randomUUID();
-    this.retryKeys.set(doc.documentId, idempotencyKey);
-
+    this.downloadingDocumentId.set(doc.id);
+    this.downloadFailure.set(null);
     try {
-      const updated = await this.dataSource.retryDocument(
-        doc.documentId,
-        idempotencyKey,
-      );
-      this.replaceDocument(updated);
-      this.retryKeys.delete(doc.documentId);
+      const url = await this.dataSource.getDownloadUrl(doc.id);
+      window.open(url, '_blank', 'noopener');
     } catch (error: unknown) {
-      console.error(`Failed to retry document ${doc.documentId}.`, error);
+      this.downloadFailure.set(toFailure(doc.id, error));
     } finally {
-      this.retryingDocumentId.set(null);
+      this.downloadingDocumentId.set(null);
     }
   }
 
@@ -96,31 +103,36 @@ export class DocumentsPageComponent {
     return formatter.format(new Date(isoDate));
   }
 
-  private replaceDocument(updated: ConsultationDocument): void {
-    this.documents.update((current) =>
-      current.map((document) =>
-        document.documentId === updated.documentId ? updated : document,
-      ),
-    );
-  }
-
-  private triggerBrowserDownload(blob: Blob, filename: string): void {
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = filename;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  }
-
   private async load(): Promise<void> {
+    const request = ++this.latestRequest;
     this.viewState.set('loading');
     try {
-      const documents = await this.dataSource.listDocuments();
-      this.documents.set(documents);
-      this.viewState.set(documents.length === 0 ? 'empty' : 'data');
+      const first = await this.dataSource.listDocuments(1);
+      if (request !== this.latestRequest) {
+        return;
+      }
+      this.documents.set(first.documents);
+      this.page.set(first.page);
+      this.totalPages.set(first.totalPages);
+      this.total.set(first.total);
+      this.viewState.set(first.documents.length === 0 ? 'empty' : 'data');
     } catch {
-      this.viewState.set('error');
+      if (request === this.latestRequest) {
+        this.viewState.set('error');
+      }
     }
   }
+}
+
+/** The shell client rejects with an ApiError: status, code, message, traceId. */
+function toFailure(documentId: string, error: unknown): DownloadFailure {
+  if (error && typeof error === 'object' && 'message' in error) {
+    const apiError = error as { message: unknown; traceId?: unknown };
+    return {
+      documentId,
+      message: String(apiError.message),
+      traceId: typeof apiError.traceId === 'string' ? apiError.traceId : undefined,
+    };
+  }
+  return { documentId, message: 'No pudimos descargar el PDF.' };
 }
