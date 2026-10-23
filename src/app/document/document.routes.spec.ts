@@ -1,8 +1,17 @@
-import { Component } from '@angular/core';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import {
+  Component,
+  EnvironmentInjector,
+  Provider,
+  createEnvironmentInjector,
+} from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, RouterOutlet, provideRouter } from '@angular/router';
 import { describe, expect, it } from 'vitest';
 
+import { DOCUMENT_DATA_SOURCE } from './data/document-data-source';
+import { HttpDocumentService } from './data/http-document.service';
 import { DOCUMENT_ROUTES } from './document.routes';
 
 @Component({
@@ -33,7 +42,12 @@ describe('DOCUMENT_ROUTES (consumed in isolation, as the shell does)', () => {
   it('instantiates the page component through a RouterOutlet without NG0201', async () => {
     await TestBed.configureTestingModule({
       imports: [TestHostComponent],
-      providers: [provideRouter(DOCUMENT_ROUTES)],
+      // The shell provides HttpClient with its interceptor; the portal never does.
+      providers: [
+        provideRouter(DOCUMENT_ROUTES),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+      ],
     }).compileComponents();
 
     const fixture = TestBed.createComponent(TestHostComponent);
@@ -57,5 +71,18 @@ describe('DOCUMENT_ROUTES (consumed in isolation, as the shell does)', () => {
     expect(
       (rootRoute.providers as readonly unknown[]).length,
     ).toBeGreaterThan(0);
+  });
+
+  it('serves the real API adapter, not synthetic data', () => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    // The router builds the same child injector from the route providers.
+    const routeScope = createEnvironmentInjector(
+      DOCUMENT_ROUTES[0].providers as Provider[],
+      TestBed.inject(EnvironmentInjector),
+    );
+
+    expect(routeScope.get(DOCUMENT_DATA_SOURCE)).toBeInstanceOf(HttpDocumentService);
   });
 });
