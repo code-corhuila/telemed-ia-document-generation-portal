@@ -8,8 +8,8 @@
     </div>
     @if (viewState() === 'data') {
       <span class="documents__counter">
-        {{ documents().length }}
-        {{ documents().length === 1 ? 'documento' : 'documentos' }}
+        {{ total() }}
+        {{ total() === 1 ? 'documento' : 'documentos' }}
       </span>
     }
   </header>
@@ -41,7 +41,7 @@
     </div>
   } @else {
     <ul class="documents__list" data-testid="documents-list">
-      @for (doc of documents(); track doc.documentId) {
+      @for (doc of documents(); track doc.id) {
         <li class="document-card">
           <header class="document-card__header">
             <span class="document-card__icon" aria-hidden="true">📄</span>
@@ -66,16 +66,38 @@
                   type="button"
                   class="btn btn--primary"
                   data-testid="document-download"
-                  [disabled]="downloadingDocumentId() === doc.documentId"
+                  [disabled]="downloadingDocumentId() === doc.id"
+                  [attr.aria-describedby]="
+                    downloadFailure()?.documentId === doc.id
+                      ? 'download-error-' + doc.id
+                      : null
+                  "
                   (click)="downloadDocument(doc)"
                 >
-                  @if (downloadingDocumentId() === doc.documentId) {
+                  @if (downloadingDocumentId() === doc.id) {
                     Descargando...
                   } @else {
                     Descargar PDF
                   }
                 </button>
               </div>
+              @if (downloadFailure(); as failure) {
+                @if (failure.documentId === doc.id) {
+                  <p
+                    class="document-card__error"
+                    role="alert"
+                    data-testid="document-download-error"
+                    [id]="'download-error-' + doc.id"
+                  >
+                    {{ failure.message }}
+                    @if (failure.traceId) {
+                      <span class="document-card__meta">
+                        (referencia: {{ failure.traceId }})
+                      </span>
+                    }
+                  </p>
+                }
+              }
             }
             @case ('GENERATING') {
               <div class="document-card__body">
@@ -95,32 +117,32 @@
                 <span class="chip chip--error">
                   <span aria-hidden="true">⚠</span> Error
                 </span>
-                <p class="document-card__error">
-                  {{ doc.errorMessage }}
+                <p class="document-card__error" data-testid="document-failed">
+                  No pudimos generar este PDF. Si lo necesitas, comunícate con
+                  soporte.
                 </p>
-                <p class="document-card__meta document-card__meta--error">
-                  Reintentos: {{ doc.retryCount }}
-                </p>
-              </div>
-              <div class="document-card__actions">
-                <button
-                  type="button"
-                  class="btn btn--danger"
-                  data-testid="document-retry"
-                  [disabled]="retryingDocumentId() === doc.documentId"
-                  (click)="retryDocument(doc)"
-                >
-                  @if (retryingDocumentId() === doc.documentId) {
-                    Reintentando...
-                  } @else {
-                    Reintentar
-                  }
-                </button>
               </div>
             }
           }
         </li>
       }
     </ul>
+    @if (hasMore()) {
+      <div class="documents__more">
+        <button
+          type="button"
+          class="btn btn--primary"
+          data-testid="documents-load-more"
+          [disabled]="loadingMore()"
+          (click)="loadMore()"
+        >
+          @if (loadingMore()) {
+            Cargando...
+          } @else {
+            Ver más documentos
+          }
+        </button>
+      </div>
+    }
   }
 </section>
