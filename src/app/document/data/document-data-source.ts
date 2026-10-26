@@ -16,8 +16,8 @@ export interface DocumentPage {
  * satisfied by HttpDocumentService, which calls the document-generation -api
  * through the shell's HttpClient.
  *
- * Failures reject with the error the shell client normalised (ApiError:
- * status, code, message, traceId).
+ * Failures reject with the error the shell client normalised (ApiError of
+ * ../../shell-contract.ts).
  */
 export interface DocumentDataSource {
   /** Page numbers start at 1. */
