@@ -207,6 +207,20 @@ describe('DocumentsPageComponent', () => {
       expect(alert?.textContent).toContain('storage unavailable');
       expect(alert?.textContent).toContain('t-1');
     });
+
+    it('shows its own message when the answer breaks the contract', async () => {
+      const { component, fixture } = await setup(
+        sourceReturning(pageOf([available]), () => Promise.reject(new Error('Document d-1 has no URL.'))),
+      );
+      await settle(fixture);
+
+      await component.downloadDocument(available);
+      fixture.detectChanges();
+
+      const alert = query(fixture, '[data-testid="document-download-error"]');
+      expect(alert?.textContent).toContain('No pudimos descargar el PDF.');
+      expect(alert?.textContent).not.toContain('has no URL');
+    });
   });
 
   it('explains a failed document without offering a retry the API does not have (DEC-005)', async () => {
