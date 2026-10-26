@@ -11,6 +11,7 @@ import {
   DocumentDataSource,
 } from '../data/document-data-source';
 import { ConsultationDocument } from '../model/consultation-document';
+import { asApiError } from '../../shell-contract';
 
 type ViewState = 'loading' | 'error' | 'empty' | 'data';
 
@@ -124,15 +125,7 @@ export class DocumentsPageComponent {
   }
 }
 
-/** The shell client rejects with an ApiError: status, code, message, traceId. */
 function toFailure(documentId: string, error: unknown): DownloadFailure {
-  if (error && typeof error === 'object' && 'message' in error) {
-    const apiError = error as { message: unknown; traceId?: unknown };
-    return {
-      documentId,
-      message: String(apiError.message),
-      traceId: typeof apiError.traceId === 'string' ? apiError.traceId : undefined,
-    };
-  }
-  return { documentId, message: 'No pudimos descargar el PDF.' };
+  const { message, traceId } = asApiError(error, 'No pudimos descargar el PDF.');
+  return { documentId, message, traceId };
 }
